@@ -1,10 +1,13 @@
 # cursor-to-dsh
 
 [![npm](https://img.shields.io/npm/v/cursor-to-dsh)](https://www.npmjs.com/package/cursor-to-dsh)
+[![license](https://img.shields.io/npm/l/cursor-to-dsh)](LICENSE)
 
 > Use Cursor models as the `cursor` LLM provider in DeepSeek Harness (DSH) and DeepSeek Desktop, through the official `@cursor/sdk` and your own Cursor API key. DSH keeps the agent loop, tools and permissions; Cursor is only the model. The docs are in Chinese.
 
 把 Cursor 注册为 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（DSH，含 DeepSeek Desktop）的模型提供方 `cursor`。DSH 负责 agent 循环、工具和权限，Cursor 只当模型。
+
+![一次带工具调用的对话：DSH 把工具交给 Cursor，Cursor 调工具时交回 DSH 执行，结果回填到同一个 Cursor run](docs/images/flow.png)
 
 ## 特点
 
@@ -41,7 +44,7 @@ Desktop 用 `desktop` profile，它只归 Desktop 管：`dsh plugin --profile de
    ```json
    {
      "dependencies": {
-       "cursor-to-dsh": "^0.1.0"
+       "cursor-to-dsh": "^0.1.1"
      },
      "dsh": {
        "profile": {
@@ -64,6 +67,13 @@ Desktop 用 `desktop` profile，它只归 Desktop 管：`dsh plugin --profile de
 其他 profile（如 CLI 的默认 profile）不受限制，可以直接 `dsh plugin --profile <名称> add cursor-to-dsh`。升级：改版本号后重复第 3 步。
 
 从源码安装（开发用）：`git clone https://github.com/lukeinx/cursor-to-dsh.git && cd cursor-to-dsh && npm install && npm run build`，第 2 步的依赖写成 `"cursor-to-dsh": "link:<仓库绝对路径>"`。源码改动后要重新 `npm run build` 并重启 DSH。
+
+也可以把下面这段发给 Agent（Claude Code、Cursor、pi 等）代装：
+
+```text
+按 https://github.com/lukeinx/cursor-to-dsh 的 README 给我的 DeepSeek Harness Desktop 安装 cursor-to-dsh，
+遵守 README 里给 Agent 的规则；装好后告诉我把 Cursor API Key 填到哪里，key 由我自己填。
+```
 
 让 coding agent 代装时，请它遵守：改 profile 前先退出 Desktop，只追加条目、不动已有的 `dependencies` 和 `bundles`；key 由用户自己填入凭据文件，Agent 不读取、不打印；在本仓库改代码前先读 [AGENTS.md](AGENTS.md)。
 

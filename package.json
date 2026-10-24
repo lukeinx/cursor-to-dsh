@@ -1,6 +1,6 @@
 {
   "name": "cursor-to-dsh",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "DeepSeek Harness plugin: Cursor models as the `cursor` LLM provider, with one Cursor agent per DSH session",
   "author": "lukeinx",
   "repository": {
@@ -19,7 +19,13 @@
     "deepseek-desktop",
     "cursor",
     "cursor-sdk",
-    "llm-provider"
+    "llm-provider",
+    "deepseek",
+    "dsh",
+    "ai-agent",
+    "claude",
+    "gpt",
+    "gemini"
   ],
   "main": "lib/index.js",
   "exports": {
