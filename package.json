@@ -1,0 +1,70 @@
+{
+  "name": "cursor-to-dsh",
+  "version": "0.1.0",
+  "description": "DeepSeek Harness plugin: Cursor models as the `cursor` LLM provider, with one Cursor agent per DSH session",
+  "author": "lukeinx",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lukeinx/cursor-to-dsh.git"
+  },
+  "homepage": "https://github.com/lukeinx/cursor-to-dsh#readme",
+  "bugs": {
+    "url": "https://github.com/lukeinx/cursor-to-dsh/issues"
+  },
+  "type": "module",
+  "license": "MIT",
+  "keywords": [
+    "dsh-plugin",
+    "deepseek-harness",
+    "deepseek-desktop",
+    "cursor",
+    "cursor-sdk",
+    "llm-provider"
+  ],
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "src",
+    "cordis.patch.yml",
+    "tsconfig.build.json"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "engines": {
+    "dsh": ">=0.2.0-rc.2"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "prepare": "tsc -p tsconfig.build.json",
+    "test": "node --experimental-strip-types --test test/*.test.ts",
+    "check": "tsc --noEmit",
+    "check:public": "node scripts/check-public.mjs",
+    "prepublishOnly": "npm run check && npm test && npm run build && npm run check:public"
+  },
+  "dependencies": {
+    "@cursor/sdk": "1.0.37"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "4.0.5",
+    "@deepseek-ai/dsh-credentials": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-launch-environment": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-llm": "0.2.1-rc.2",
+    "@deepseek-ai/schemastery": "3.18.5",
+    "@types/node": "22.20.5",
+    "typescript": "5.9.3"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "~4.0.5",
+    "@deepseek-ai/dsh-llm": ">=0.2.0-rc.2",
+    "@deepseek-ai/dsh-credentials": ">=0.2.0-rc.2",
+    "@deepseek-ai/dsh-launch-environment": ">=0.2.0-rc.2",
+    "@deepseek-ai/schemastery": "~3.18.5"
+  }
+}

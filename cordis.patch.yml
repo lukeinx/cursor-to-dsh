@@ -1,0 +1,8 @@
+# Mounts the Cursor adapter. Override the row by id in your profile's cordis.patch.yml
+# to change its config; a patch replaces the whole `config`.
+- insert:
+    - id: llm-cursor
+      name: cursor-to-dsh
+      config:
+        apiKeyEnv: CURSOR_API_KEY
+        context: min
