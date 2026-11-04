@@ -2,7 +2,7 @@
 
 [![license](https://img.shields.io/npm/l/cursor-to-dsh)](LICENSE)
 
-> Fork: [AngusFu/cursor-to-dsh](https://github.com/AngusFu/cursor-to-dsh)（上游 [lukeinx/cursor-to-dsh](https://github.com/lukeinx/cursor-to-dsh)）。本 fork 增加：**多 Cursor API Key 配置 / 切换**、可选 **Cursor `webSearch` / `webFetch`**，并把 web 工具事件桥成 DSH 工具卡片。
+> Fork: [AngusFu/cursor-to-dsh](https://github.com/AngusFu/cursor-to-dsh)（上游 [lukeinx/cursor-to-dsh](https://github.com/lukeinx/cursor-to-dsh)）。本 fork 增加：**Settings → Cursor 配置页**（多 API Key / 选用 / 联网开关）、会话级 `/cursor-web`、可选 **Cursor `webSearch` / `webFetch`** 与 DSH 工具卡片。
 
 > Use Cursor models as the `cursor` LLM provider in DeepSeek Harness (DSH) and DeepSeek Desktop, through the official `@cursor/sdk` and your own Cursor API key. DSH keeps the agent loop, tools and permissions; Cursor is only the model. The docs are in Chinese.
 
@@ -14,8 +14,8 @@
 
 - **官方接口**：只用 Cursor 官方 `@cursor/sdk` 和你自己的 API Key，不逆向私有协议、不读 Cursor IDE 登录态；通过 DSH 的 `ctx.llm.registerAdapter` 注册，不改宿主代码。
 - **工具归 DSH**：默认关闭 Cursor 内置工具；读写文件、执行命令都由 DSH 执行，沿用沙箱和审批。
-- **可选联网**：开启 `enableWebTools`（或 `DSH_CURSOR_WEB_TOOLS=1`）后，Cursor 可调用官方 `webSearch` / `webFetch`（在 Cursor 侧执行，**不经** DSH 审批）。流式阶段用 thinking 显示进度；本轮以 `stop` 结束时再刷出工具卡片，避免 DSH 误执行。
-- **多 Key**：`apiKeyProfiles` + `activeKeyId`，可在设置 / patch 里维护多把 key 并选用其一。
+- **可选联网**：在 **设置 → Cursor** 打开默认联网，或会话里 `/cursor-web on|off`。开启后 Cursor 可调用官方 `webSearch` / `webFetch`（Cursor 侧执行，**不经** DSH 审批）。流式阶段用 thinking 显示进度；本轮以 `stop` 结束时再刷出工具卡片。
+- **多 Key UI**：设置 → Cursor 添加 / 保存 / 选用 / 删除；也可用 `/cursor-key-*` 命令。
 - **缓存复用**：每个 DSH 会话对应一个 Cursor agent，只发新增内容；工具结果回填到同一个 run 继续。
 - **模型与用量**：模型和推理强度来自 Cursor 实时目录，始终 `fast=false`；按 DSH 互不重叠的用量桶上报，不误报超限。
 - **图片**：用户消息和工具结果里的图片转给 Cursor。
@@ -33,7 +33,7 @@
 
    ```json
    {
-     "dependencies": { "cursor-to-dsh": "github:AngusFu/cursor-to-dsh#v0.2.0" },
+     "dependencies": { "cursor-to-dsh": "github:AngusFu/cursor-to-dsh#v0.3.0" },
      "dsh": { "profile": { "bundles": ["…已有条目…", "cursor-to-dsh"] } }
    }
    ```
@@ -48,23 +48,25 @@
 
 升级：改版本号后重复第 3 步。
 
-### 填 API Key（支持多把）
+### 填 API Key（支持多把）— 用配置页，不要手写 yaml
 
 在 [cursor.com/dashboard](https://cursor.com/dashboard) → API Keys → New API Key 创建（个人 key 或 service account key，不支持 Team Admin key）。
 
-Desktop 的「模型」设置页对第三方插件填 key 支持有限，**推荐**写进 `~/.dsh/.credentials.yaml`（权限 `0600`，热加载）。多 key 示例：
+**主路径：设置 → Cursor**（本插件自带页面）
 
-```yaml
-version: 1
-refs:
-  CURSOR_API_KEY: <默认 key>
-  CURSOR_API_KEY_WORK: <工作 key>
-  CURSOR_API_KEY_PERSONAL: <个人 key>
-```
+1. 打开 DeepSeek Harness / Desktop → **设置 → Cursor**
+2. **添加** profile（如 `work` / `personal`）
+3. 在对应行粘贴 API Key → **保存 Key**（只写进 DSH credentials，界面永不回显）
+4. 点 **选用** 切换当前 Key
+5. 需要时打开 **联网工具（默认）**（`webSearch` / `webFetch`）
 
-插件配置里用 `apiKeyProfiles` + `activeKeyId` 指向这些 ref（见下方「配置」）。也可在 Cursor 提供方设置页（本插件 Schema）里改 profiles / 开关联网。
+单次对话覆盖联网：在聊天输入 `/cursor-web on` 或 `/cursor-web off`（高于设置默认；下一轮会按需重建 Cursor agent）。
 
-单 profile 查找顺序：凭据文件 → 环境变量 / launch env → 该 profile 的明文 `apiKey`。
+也可用斜杠命令（非 Web 表面）：`/cursor-keys`、`/cursor-key-set <id> <key>`（不记入会话日志）、`/cursor-key-use <id>`、`/cursor-web-default on|off`。
+
+> 不要手改 `~/.dsh/.credentials.yaml`。配置页和命令会调用 `credentials.set`；yaml 只是底层存储。
+
+单 profile 查找顺序：credentials → 环境变量 / launch env →（不推荐）明文 `apiKey`。
 
 ### 验证
 
@@ -75,14 +77,14 @@ refs:
 把下面这段发给 Claude Code、Cursor、pi 等：
 
 ```text
-按 https://github.com/AngusFu/cursor-to-dsh 的 README 给我的 DeepSeek Harness Desktop 安装 cursor-to-dsh（github:AngusFu/cursor-to-dsh#v0.2.0），
+按 https://github.com/AngusFu/cursor-to-dsh 的 README 给我的 DeepSeek Harness Desktop 安装 cursor-to-dsh（github:AngusFu/cursor-to-dsh#v0.3.0），
 遵守 README 里给 Agent 的规则；装好后告诉我把 Cursor API Key 填到哪里，key 由我自己填。
 ```
 
 给 Agent 的规则：
 
 - 改 profile 前先退出 Desktop；只追加条目，不改已有的 `dependencies` 和 `bundles`。
-- key 由用户自己写入凭据文件，Agent 不读取、不打印。
+- key 由用户在「设置 → Cursor」填写，Agent 不读取、不打印密钥。
 - 改本仓库代码前先读 [AGENTS.md](AGENTS.md)。
 
 ## 配置
@@ -108,9 +110,9 @@ refs:
 
 | 配置项 | 默认值 | 环境变量覆盖 | 含义 |
 |---|---|---|---|
-| `enableWebTools` | `false` | `DSH_CURSOR_WEB_TOOLS` | 开启 Cursor 官方 `webSearch` / `webFetch`；流里可见进度与工具卡片 |
-| `apiKeyProfiles` | 一项 `default` | | 多把 Cursor API Key（每项：`id` / `label` / `apiKeyEnv` / 可选 `apiKey`） |
-| `activeKeyId` | `default` | | 当前使用的 profile `id` |
+| `enableWebTools` | `false` | `DSH_CURSOR_WEB_TOOLS`；会话 `/cursor-web` 更高优先 | 默认是否开启 Cursor 官方 `webSearch` / `webFetch`（设置 → Cursor 可改） |
+| `apiKeyProfiles` | 一项 `default` | | 多把 Key 的元数据（密钥在 credentials；请用设置页维护） |
+| `activeKeyId` | `default` | | 当前使用的 profile `id`（设置页「选用」） |
 | `apiKeyEnv` | `CURSOR_API_KEY` | | 兼容旧版：profiles 为空时的单 key 凭据名 |
 | `apiKey` | 无 | | 明文 key，不推荐 |
 | `context` | `min` | `DSH_CURSOR_CONTEXT` | 上下文档位：`min`、`max` 或如 `300k`；被拒时自动降档 |

@@ -288,7 +288,7 @@ async function openSession(
   cwd: string,
   deps: TurnDeps,
 ): Promise<CursorSession> {
-  const s = new CursorSession(key, signatureOf(modelId, params), params);
+  const s = new CursorSession(key, signatureOf(modelId, params, Boolean(deps.enableWebTools)), params);
   s.systemPrompt = t.systemPrompt;
   const { local } = syncTools(s, t.tools);
   s.agent = await deps.createAgent({
@@ -302,8 +302,8 @@ async function openSession(
   return s;
 }
 
-function signatureOf(modelId: string, params: Param[] | undefined): string {
-  return hash(JSON.stringify([modelId, params ?? []]));
+function signatureOf(modelId: string, params: Param[] | undefined, enableWebTools = false): string {
+  return hash(JSON.stringify([modelId, params ?? [], enableWebTools ? 1 : 0]));
 }
 
 /**
@@ -370,7 +370,7 @@ export async function runTurn(opts: {
   let params = modelParams(model, opts.reasoning);
   const known = workingContext.get(modelId);
   if (known) params = params?.map((p) => (p.id === "context" ? { id: p.id, value: known } : p));
-  const signature = signatureOf(modelId, params);
+  const signature = signatureOf(modelId, params, Boolean(deps.enableWebTools));
 
   const transcriptTokens = () => estimateTranscript(t.systemPrompt, t.tools, t.messages, reply.content);
   const contextTokens = () => transcriptTokens() + cursorOverhead(modelId);

@@ -1,7 +1,7 @@
 {
   "name": "cursor-to-dsh",
-  "version": "0.2.0",
-  "description": "DeepSeek Harness plugin: Cursor models as the cursor LLM provider (fork: multi API keys + optional Cursor webSearch/webFetch with DSH tool cards)",
+  "version": "0.3.0",
+  "description": "DeepSeek Harness plugin: Cursor models + Settings UI for multi API keys and optional webSearch/webFetch (session /cursor-web)",
   "author": "AngusFu (fork of lukeinx/cursor-to-dsh)",
   "repository": {
     "type": "git",
@@ -30,25 +30,36 @@
   "main": "lib/index.js",
   "exports": {
     ".": "./lib/index.js",
+    "./client": "./lib/client.js",
     "./package.json": "./package.json"
   },
   "files": [
     "lib",
     "src",
+    "client",
     "cordis.patch.yml",
     "tsconfig.build.json"
   ],
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-renderer",
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-primitives",
+        "@deepseek-ai/dsh-client-ui-settings"
+      ]
     }
   },
   "engines": {
     "dsh": ">=0.2.0-rc.2"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
-    "prepare": "tsc -p tsconfig.build.json",
+    "build": "tsc -p tsconfig.build.json && node scripts/copy-client.mjs",
+    "prepare": "npm run build",
     "test": "node --experimental-strip-types --test test/*.test.ts",
     "check": "tsc --noEmit",
     "check:public": "node scripts/check-public.mjs",
@@ -71,6 +82,9 @@
     "@deepseek-ai/dsh-llm": ">=0.2.0-rc.2",
     "@deepseek-ai/dsh-credentials": ">=0.2.0-rc.2",
     "@deepseek-ai/dsh-launch-environment": ">=0.2.0-rc.2",
-    "@deepseek-ai/schemastery": "~3.18.5"
+    "@deepseek-ai/schemastery": "~3.18.5",
+    "@deepseek-ai/dsh-commands": ">=0.2.0-rc.2",
+    "@deepseek-ai/dsh-settings": ">=0.2.0-rc.2",
+    "@deepseek-ai/dsh-client-connection": ">=0.2.0-rc.2"
   }
 }

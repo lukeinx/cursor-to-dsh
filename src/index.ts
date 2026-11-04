@@ -1,10 +1,9 @@
 /**
  * DSH plugin entry: registers Cursor as the `cursor` LLM provider route.
  *
- * The active API key is resolved per call from `apiKeyProfiles` + `activeKeyId`
- * (credentials → env → inline), falling back to the legacy `apiKeyEnv` / `apiKey`.
- * The Cursor agent works in the session's working directory unless `DSH_CURSOR_CWD`
- * or `cwd` overrides it.
+ * Keys and the global web-tools default are managed from Settings → Cursor
+ * (and slash commands). Secrets go through credentials.set — never hand-edit
+ * ~/.dsh/.credentials.yaml. Per-chat web tools: /cursor-web on|off.
  */
 import type { Context, Volatile } from "@deepseek-ai/cordis";
 import { credentialRef } from "@deepseek-ai/dsh-credentials";
@@ -12,53 +11,78 @@ import { launchEnvironmentOf } from "@deepseek-ai/dsh-launch-environment";
 import Schema from "@deepseek-ai/schemastery";
 
 import { CursorAdapter } from "./adapter.ts";
+import { registerCursorCommands } from "./commands.ts";
+import { cfgString } from "./config-value.ts";
+import { registerHostApi } from "./host-api.ts";
 import { type ApiKeyProfile, type KeyConfig, resolveActiveApiKey } from "./keys.ts";
 import { PROVIDER_ID, setContextPreference } from "./models.ts";
 import { createCursorAgent, listCursorModels, prewarmCursor } from "./sdk.ts";
 import { closeAllCursorSessions, debug } from "./session.ts";
-import { webToolsEnabled } from "./web-tools.ts";
+import { resolveWebToolsEnabled } from "./session-web.ts";
+import { readActiveKeyId, readEnableWebTools, readProfiles, type CursorUiConfig } from "./ui-state.ts";
 
 export const name = "cursor-to-dsh";
 export const inject = ["llm"];
 
-export interface Config extends KeyConfig {
+export interface Config {
   /** Volatile so the settings service gives this plugin a namespace and the Models page lists Cursor. */
   apiKeyEnv: Volatile<string> | string;
   apiKey?: string;
-  context: string;
-  cwd?: string;
-  /** When true (or DSH_CURSOR_WEB_TOOLS=1), Cursor may call webSearch / webFetch; DSH stream shows cards. */
-  enableWebTools?: boolean;
-  apiKeyProfiles?: ApiKeyProfile[];
-  activeKeyId?: string;
+  context: string | Volatile<string>;
+  cwd?: string | Volatile<string>;
+  /** Global default; session /cursor-web override wins. Env DSH_CURSOR_WEB_TOOLS overrides this when set. */
+  enableWebTools?: boolean | Volatile<boolean>;
+  apiKeyProfiles?: ApiKeyProfile[] | Volatile<ApiKeyProfile[]>;
+  activeKeyId?: string | Volatile<string>;
 }
 
 const ApiKeyProfileSchema = Schema.object({
   id: Schema.string().required().description("Stable profile id (referenced by activeKeyId)."),
-  label: Schema.string().description("Display label in settings."),
-  apiKeyEnv: Schema.string().role("credential-ref").description("Credential / environment variable that holds this profile's Cursor API key."),
-  apiKey: Schema.string().role("secret").description("Inline key for this profile; used only when the credential and environment are empty."),
+  label: Schema.string().description("Display label in Settings → Cursor."),
+  apiKeyEnv: Schema.string().role("credential-ref").description("Credential reference that holds this profile's Cursor API key (filled via Settings → Cursor, never hand-edited yaml)."),
+  apiKey: Schema.string().role("secret").description("Deprecated inline key; prefer Settings → Cursor which stores via credentials."),
 });
 
 export const Config: Schema<Config> = Schema.object({
   enableWebTools: Schema.boolean()
     .default(false)
-    .description("Enable Cursor built-in webSearch / webFetch. They run on the Cursor side (not DSH sandbox/approvals). DSH UI shows tool cards and a short progress line when they finish. Override with DSH_CURSOR_WEB_TOOLS=1|0."),
+    .description("Default: enable Cursor built-in webSearch / webFetch. Per-chat override: /cursor-web on|off. Env DSH_CURSOR_WEB_TOOLS=1|0 overrides this default.")
+    .volatile(),
   apiKeyProfiles: Schema.array(ApiKeyProfileSchema)
     .default([{ id: "default", label: "Default", apiKeyEnv: "CURSOR_API_KEY" }])
-    .description("Multiple Cursor API keys. Put values in ~/.dsh/.credentials.yaml under refs, then point apiKeyEnv at the ref name."),
-  activeKeyId: Schema.string().default("default").description("Which apiKeyProfiles.id is used for new Cursor agents."),
+    .description("Cursor API key profiles. Add/select/store keys in Settings → Cursor (or /cursor-key-* commands).")
+    .volatile(),
+  activeKeyId: Schema.string().default("default").description("Which apiKeyProfiles.id is used for new Cursor agents.").volatile(),
   apiKeyEnv: Schema.string().role("credential-ref").default("CURSOR_API_KEY").description("Legacy single-key credential / env name (used when apiKeyProfiles is empty).").volatile(),
-  apiKey: Schema.string().role("secret").description("Legacy inline Cursor API key, used only when credentials and environment are empty."),
+  apiKey: Schema.string().role("secret").description("Legacy inline Cursor API key; prefer Settings → Cursor."),
   context: Schema.string().default("min").description("Cursor context tier: min, max, or an offered value such as 300k."),
   cwd: Schema.string().description("Cursor agent working directory; default is the session's directory."),
 }) as any;
 
 export function apply(ctx: Context, config: Config): void {
-  setContextPreference(config?.context);
+  const getConfig = (): CursorUiConfig => config as CursorUiConfig;
 
-  const resolveApiKey = async (): Promise<string | undefined> =>
-    resolveActiveApiKey(config, {
+  setContextPreference(cfgString(config?.context, "min"));
+  (ctx as any).on?.("loader/volatile-update", () => {
+    setContextPreference(cfgString(config?.context, "min"));
+  });
+
+  // Own settings page (Settings → Cursor); disable auto-generated form.
+  ctx.inject?.(["settings"], (sctx: any) => {
+    sctx.effect?.(
+      () => sctx.settings.configure({ auto: false }, ctx.fiber),
+      "cursor-to-dsh: settings page policy",
+    );
+  });
+
+  const resolveApiKey = async (): Promise<string | undefined> => {
+    const live: KeyConfig = {
+      apiKeyProfiles: readProfiles(getConfig()),
+      activeKeyId: readActiveKeyId(getConfig()),
+      apiKeyEnv: cfgString(config?.apiKeyEnv) || "CURSOR_API_KEY",
+      apiKey: config?.apiKey,
+    };
+    return resolveActiveApiKey(live, {
       fromCredentials: async (ref) => {
         const credentials: any = (ctx as any).get("credentials");
         if (!credentials) return undefined;
@@ -72,9 +96,10 @@ export function apply(ctx: Context, config: Config): void {
       },
       fromEnv: (ref) => launchEnvironmentOf(ctx).get(ref)?.value ?? process.env[ref],
     });
+  };
 
   const cwdFor = (sessionId: string | undefined): string => {
-    const override = process.env.DSH_CURSOR_CWD?.trim() || config?.cwd?.trim();
+    const override = process.env.DSH_CURSOR_CWD?.trim() || cfgString(config?.cwd).trim();
     if (override) return override;
     try {
       const session = sessionId ? (ctx as any).get("sessions")?.get?.(sessionId) : undefined;
@@ -93,11 +118,15 @@ export function apply(ctx: Context, config: Config): void {
     return { data: Buffer.from(stored.data).toString("base64"), mimeType: stored.ref?.mediaType ?? ref.mediaType };
   };
 
-  const enableWeb = () => webToolsEnabled(config?.enableWebTools);
+  const enableWebForSession = (sessionId?: string) =>
+    resolveWebToolsEnabled({
+      sessionId,
+      configFlag: readEnableWebTools(getConfig()),
+    });
 
   const prewarm = /^(0|false|off)$/i.test(process.env.DSH_CURSOR_PREWARM ?? "")
     ? undefined
-    : (opts: { apiKey: string; modelId: string }) => void prewarmCursor({ ...opts, enableWebTools: enableWeb() });
+    : (opts: { apiKey: string; modelId: string }) => void prewarmCursor({ ...opts, enableWebTools: enableWebForSession() });
 
   const adapter = new CursorAdapter({
     createAgent: createCursorAgent,
@@ -106,14 +135,19 @@ export function apply(ctx: Context, config: Config): void {
     cwdFor,
     readImage,
     prewarm,
-    enableWebTools: enableWeb,
+    enableWebTools: enableWebForSession,
   });
   (ctx as any).llm.registerConfigurableProviders([
     { provider: PROVIDER_ID, displayName: "Cursor", settingsNs: (ctx as any).fiber?.entry?.options.id ?? name, settingsPath: [] },
   ]);
   (ctx as any).llm.registerAdapter([PROVIDER_ID], adapter);
   ctx.effect(() => () => closeAllCursorSessions(), "cursor sessions");
+
+  registerHostApi(ctx, getConfig);
+  registerCursorCommands(ctx, getConfig);
+
   void resolveApiKey()
     .then((key) => (key ? adapter.listModels(PROVIDER_ID) : undefined))
     .catch(() => {});
+
 }
