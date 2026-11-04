@@ -3,8 +3,6 @@ import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { cursorBuiltinTools } from "./web-tools.ts";
-
 const require = createRequire(import.meta.url);
 
 /**
@@ -45,7 +43,7 @@ export async function createCursorAgent(opts: any): Promise<any> {
 let warming: Promise<void> | undefined;
 
 export function prewarmCursor(
-  opts: { apiKey: string; modelId: string; enableWebTools?: boolean },
+  opts: { apiKey: string; modelId: string },
   create = createCursorAgent,
 ): Promise<void> {
   warming ??= (async () => {
@@ -58,7 +56,7 @@ export function prewarmCursor(
       agent = await create({
         model: { id: opts.modelId },
         apiKey: opts.apiKey,
-        tools: cursorBuiltinTools(Boolean(opts.enableWebTools)),
+        tools: ["mcp"],
         local,
       });
       const run = await agent.send(".");

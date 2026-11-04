@@ -33,7 +33,6 @@ import {
 import { ERROR_CODES, Reply } from "./reply.ts";
 import type { Transcript } from "./transcript.ts";
 import { calibrateOverhead, cursorOverhead, runUsage } from "./usage.ts";
-import { cursorBuiltinTools, isCursorWebTool, summarizeWebToolResult } from "./web-tools.ts";
 
 const SLOTS_PER_KEY = 3;
 const IDLE_CLOSE_MS = 20 * 60_000;
@@ -67,8 +66,6 @@ class CursorSession {
   runCalibrates = true;
   sentFirst = false;
   pending: PendingCall[] = [];
-  /** Cursor-native webSearch/webFetch observed this run (cards flushed only on finish=stop). */
-  nativeLog: { id: string; name: string; args: Record<string, any>; status: string; result?: unknown; carded: boolean }[] = [];
   lastCallAt = 0;
   toolsKey = "";
   toolNames: string[] = [];
@@ -122,7 +119,7 @@ class CursorSession {
   }
 
   startRun(run: any, calibrates = true): void {
-    Object.assign(this, { run, events: [], runDone: false, runResult: undefined, runError: undefined, modelCalls: 1, runCalibrates: calibrates, nativeLog: [] });
+    Object.assign(this, { run, events: [], runDone: false, runResult: undefined, runError: undefined, modelCalls: 1, runCalibrates: calibrates });
     void (async () => {
       try {
         const sent = Date.now();
@@ -171,18 +168,6 @@ function settle(fn: () => void): void {
     fn();
   } catch {
     /* best effort */
-  }
-}
-
-/** Emit observational tool-call cards for Cursor-native web tools (finish must be stop). */
-function flushNativeWebCards(s: CursorSession, reply: Reply): void {
-  const pending = s.nativeLog.filter((n) => !n.carded);
-  if (!pending.length) return;
-  reply.toolCalls(pending.map((n) => ({ id: n.id, name: n.name, arguments: n.args })));
-  for (const n of pending) {
-    n.carded = true;
-    const summary = summarizeWebToolResult(n.name, n.result, n.status === "error");
-    reply.text(`\n\n[Cursor ${n.name} ${n.status === "error" ? "failed" : "done"}] ${summary}\n`);
   }
 }
 
@@ -249,8 +234,6 @@ export function planIncrement(s: CursorSession | undefined, messages: any[]): Pl
 
 export interface TurnDeps {
   createAgent: (opts: any) => Promise<any>;
-  /** When true, Agent.create also gets webSearch / webFetch. */
-  enableWebTools?: boolean;
 }
 
 /** Auxiliary calls (titles, compaction) carry the session id but must not touch its agent. */
@@ -288,22 +271,22 @@ async function openSession(
   cwd: string,
   deps: TurnDeps,
 ): Promise<CursorSession> {
-  const s = new CursorSession(key, signatureOf(modelId, params, Boolean(deps.enableWebTools)), params);
+  const s = new CursorSession(key, signatureOf(modelId, params), params);
   s.systemPrompt = t.systemPrompt;
   const { local } = syncTools(s, t.tools);
   s.agent = await deps.createAgent({
     model: { id: modelId, ...(params?.length ? { params } : {}) },
     apiKey,
-    // "mcp" always: DSH tools are MCP custom tools. Optionally add Cursor webSearch/webFetch.
-    tools: cursorBuiltinTools(Boolean(deps.enableWebTools)),
+    // "mcp" always: DSH tools are MCP custom tools. Cursor built-ins stay off.
+    tools: ["mcp"],
     local: { cwd, settingSources: [], customTools: local?.customTools },
   });
   storeSession(s);
   return s;
 }
 
-function signatureOf(modelId: string, params: Param[] | undefined, enableWebTools = false): string {
-  return hash(JSON.stringify([modelId, params ?? [], enableWebTools ? 1 : 0]));
+function signatureOf(modelId: string, params: Param[] | undefined): string {
+  return hash(JSON.stringify([modelId, params ?? []]));
 }
 
 /**
@@ -355,12 +338,10 @@ export async function runTurn(opts: {
   apiKey: string | undefined;
   sessionKey: string;
   cwd: string;
-  enableWebTools?: boolean;
   deps: TurnDeps;
   reply: Reply;
 }): Promise<void> {
-  const { model, apiKey, sessionKey, cwd, reply, signal } = opts;
-  const deps: TurnDeps = { ...opts.deps, enableWebTools: opts.enableWebTools ?? opts.deps.enableWebTools };
+  const { model, apiKey, sessionKey, cwd, reply, signal, deps } = opts;
   const t = opts.transcript;
   const modelId = resolveModelId(model.id);
   if (!apiKey) {
@@ -370,7 +351,7 @@ export async function runTurn(opts: {
   let params = modelParams(model, opts.reasoning);
   const known = workingContext.get(modelId);
   if (known) params = params?.map((p) => (p.id === "context" ? { id: p.id, value: known } : p));
-  const signature = signatureOf(modelId, params, Boolean(deps.enableWebTools));
+  const signature = signatureOf(modelId, params);
 
   const transcriptTokens = () => estimateTranscript(t.systemPrompt, t.tools, t.messages, reply.content);
   const contextTokens = () => transcriptTokens() + cursorOverhead(modelId);
@@ -451,26 +432,6 @@ export async function runTurn(opts: {
               emitted = true;
             }
           }
-        } else if (msg?.type === "tool_call" && isCursorWebTool(msg.name)) {
-          // Cursor runs these itself. Stream thinking progress now; emit real tool-call cards
-          // only when this turn finishes with stop (never with toolUse — DSH would try to execute them).
-          const id = String(msg.call_id || `cursor_${msg.name}_${s.nativeLog.length}`);
-          let entry = s.nativeLog.find((n) => n.id === id);
-          if (!entry) {
-            entry = { id, name: msg.name, args: asObject(msg.args), status: msg.status ?? "running", carded: false };
-            s.nativeLog.push(entry);
-          } else {
-            entry.status = msg.status ?? entry.status;
-            if (msg.args != null) entry.args = asObject(msg.args);
-          }
-          if (msg.result !== undefined) entry.result = msg.result;
-          const phase = msg.status === "error" ? "failed" : msg.status === "completed" ? "done" : "running";
-          const detail =
-            msg.status === "completed" || msg.status === "error"
-              ? summarizeWebToolResult(msg.name, msg.result, msg.status === "error")
-              : JSON.stringify(entry.args);
-          reply.thinking(`[Cursor ${msg.name} ${phase}] ${detail}\n`);
-          emitted = true;
         }
       }
       if (signal?.aborted) {
@@ -505,7 +466,6 @@ export async function runTurn(opts: {
         reply.usage = runUsage(result?.usage, s.modelCalls, contextTokens());
         if (s.modelCalls === 1 && s.runCalibrates) calibrateOverhead(modelId, result?.usage, transcriptTokens());
         s.run = undefined;
-        flushNativeWebCards(s, reply);
         reply.finish("stop");
         s.seen.push(fingerprint(reply.message));
         if (sessionKey.startsWith(ANON_PREFIX)) dropSession(s);

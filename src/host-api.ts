@@ -7,7 +7,6 @@ import {
   addProfile,
   removeProfile,
   setProfileKey,
-  setWebDefault,
   uiSnapshot,
   useProfile,
 } from "./ui-state.ts";
@@ -93,17 +92,6 @@ export function registerHostApi(ctx: any, getConfig: () => CursorUiConfig): void
           fetch: fetchAction(async (request) => {
             const body = await readJson(request);
             await useProfile(ctx, getConfig(), String(body.id ?? ""));
-            return uiSnapshot(ctx, getConfig());
-          }),
-        }),
-        cctx.connection.fetch.register({
-          path: `${API_ROOT}/web-default`,
-          methods: ["POST"],
-          requestBody: "buffered",
-          fetch: fetchAction(async (request) => {
-            const body = await readJson(request);
-            const enabled = Boolean(body.enabled);
-            await setWebDefault(ctx, enabled);
             return uiSnapshot(ctx, getConfig());
           }),
         }),

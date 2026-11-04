@@ -1,7 +1,7 @@
 {
   "name": "cursor-to-dsh",
   "version": "0.3.0",
-  "description": "DeepSeek Harness plugin: Cursor models + Settings UI for multi API keys and optional webSearch/webFetch (session /cursor-web)",
+  "description": "DeepSeek Harness plugin: Cursor models + Settings UI for multi Cursor API keys",
   "author": "AngusFu (fork of lukeinx/cursor-to-dsh)",
   "repository": {
     "type": "git",

@@ -184,20 +184,6 @@ test("prewarm: one throwaway agent per process, run cancelled, agent closed, fai
 
 
 import { activeProfile, normalizeProfiles, profileCredentialRef, resolveActiveApiKey } from "../src/keys.ts";
-import { cursorBuiltinTools, isCursorWebTool, summarizeWebToolResult, webToolsEnabled } from "../src/web-tools.ts";
-
-test("web tool helpers: enable flag, names, summaries", () => {
-  assert.deepEqual(cursorBuiltinTools(false), ["mcp"]);
-  assert.deepEqual(cursorBuiltinTools(true), ["mcp", "webSearch", "webFetch"]);
-  assert.equal(isCursorWebTool("webSearch"), true);
-  assert.equal(isCursorWebTool("read"), false);
-  assert.equal(webToolsEnabled(false, {}), false);
-  assert.equal(webToolsEnabled(false, { DSH_CURSOR_WEB_TOOLS: "1" }), true);
-  assert.equal(webToolsEnabled(true, { DSH_CURSOR_WEB_TOOLS: "0" }), false);
-  assert.match(summarizeWebToolResult("webSearch", { results: [{ title: "A" }, { title: "B" }] }, false), /2 results/);
-  assert.match(summarizeWebToolResult("webFetch", { url: "https://x.test", text: "hello world" }, false), /https:\/\/x\.test/);
-});
-
 test("api key profiles: active selection and lookup order", async () => {
   const profiles = normalizeProfiles({
     apiKeyProfiles: [
@@ -223,23 +209,9 @@ test("api key profiles: active selection and lookup order", async () => {
   assert.equal(profileCredentialRef(legacy[0]), "CURSOR_API_KEY");
 });
 
-import { resolveWebToolsEnabled, resetSessionWebTools, setSessionWebTools, getSessionWebTools } from "../src/session-web.ts";
-import { applyOverlay, readActiveKeyId, readEnableWebTools, readProfiles, resetOverlay } from "../src/ui-state.ts";
+import { applyOverlay, readActiveKeyId, readProfiles, resetOverlay } from "../src/ui-state.ts";
 
-test("session web tools override beats env and config", () => {
-  resetSessionWebTools();
-  assert.equal(resolveWebToolsEnabled({ configFlag: false, env: {} }), false);
-  assert.equal(resolveWebToolsEnabled({ configFlag: true, env: { DSH_CURSOR_WEB_TOOLS: "0" } }), false);
-  assert.equal(resolveWebToolsEnabled({ configFlag: false, env: { DSH_CURSOR_WEB_TOOLS: "1" } }), true);
-  setSessionWebTools("sess-1", true);
-  assert.equal(resolveWebToolsEnabled({ sessionId: "sess-1", configFlag: false, env: { DSH_CURSOR_WEB_TOOLS: "0" } }), true);
-  setSessionWebTools("sess-1", false);
-  assert.equal(resolveWebToolsEnabled({ sessionId: "sess-1", configFlag: true, env: { DSH_CURSOR_WEB_TOOLS: "1" } }), false);
-  assert.equal(getSessionWebTools("other"), undefined);
-  resetSessionWebTools();
-});
-
-test("ui overlay selects active profile and web default", () => {
+test("ui overlay selects active profile", () => {
   resetOverlay();
   const config = {
     apiKeyProfiles: [
@@ -247,13 +219,10 @@ test("ui overlay selects active profile and web default", () => {
       { id: "work", label: "Work", apiKeyEnv: "CURSOR_API_KEY_WORK" },
     ],
     activeKeyId: "default",
-    enableWebTools: false,
   };
   assert.equal(readActiveKeyId(config), "default");
-  assert.equal(readEnableWebTools(config), false);
-  applyOverlay({ activeKeyId: "work", enableWebTools: true });
+  applyOverlay({ activeKeyId: "work" });
   assert.equal(readActiveKeyId(config), "work");
-  assert.equal(readEnableWebTools(config), true);
   assert.equal(readProfiles(config).length, 2);
   resetOverlay();
 });

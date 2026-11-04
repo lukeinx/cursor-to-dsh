@@ -1,5 +1,5 @@
 /**
- * Browser half: Settings → Cursor (multi API keys + web tools default).
+ * Browser half: Settings → Cursor (multi API keys).
  * Built as a DSH client ModuleLoader factory (copied to lib/client.js).
  */
 window.__ModuleLoader__.load({
@@ -21,13 +21,7 @@ window.__ModuleLoader__.load({
     const EN = {
       nav: "Cursor",
       title: "Cursor",
-      intro: "Store multiple Cursor API keys here (write-only via DSH credentials). Pick which key is active, and set the default for Cursor webSearch / webFetch. Per-chat override: /cursor-web on|off in the conversation.",
-      webTitle: "Web tools (default)",
-      webHint: "When on, new Cursor agents may call webSearch / webFetch on Cursor's side (not DSH approvals). A chat can override with /cursor-web.",
-      webOn: "Enabled",
-      webOff: "Disabled",
-      webEnable: "Enable",
-      webDisable: "Disable",
+      intro: "Store multiple Cursor API keys here (write-only via DSH credentials). Pick which key is active.",
       keysTitle: "API keys",
       keysHint: "Keys are never shown after save. Leave the input blank to keep the current key.",
       active: "Active",
@@ -45,20 +39,14 @@ window.__ModuleLoader__.load({
       placeholderKey: "Paste Cursor API key",
       placeholderId: "work",
       placeholderLabel: "Work",
-      commandHint: "Chat commands: /cursor-keys, /cursor-key-set, /cursor-key-use, /cursor-web on|off, /cursor-web-default on|off.",
+      commandHint: "Chat commands: /cursor-keys, /cursor-key-set, /cursor-key-use, /cursor-key-add, /cursor-key-remove.",
       pluginVersion: "Plugin version:",
       error: "Error",
     };
     const ZH = {
       nav: "Cursor",
       title: "Cursor",
-      intro: "在此管理多把 Cursor API Key（经 DSH credentials 只写存储）。选择当前使用的 Key，并设置 webSearch / webFetch 的默认开关。单次对话可用 /cursor-web on|off 覆盖。",
-      webTitle: "联网工具（默认）",
-      webHint: "开启后，新建的 Cursor agent 可调用 Cursor 侧 webSearch / webFetch（不经 DSH 审批）。对话内可用 /cursor-web 覆盖。",
-      webOn: "已开启",
-      webOff: "已关闭",
-      webEnable: "开启",
-      webDisable: "关闭",
+      intro: "在此管理多把 Cursor API Key（经 DSH credentials 只写存储）。选择当前使用的 Key。",
       keysTitle: "API Key",
       keysHint: "保存后不会回显密钥。输入框留空表示保留现有 Key。",
       active: "使用中",
@@ -76,7 +64,7 @@ window.__ModuleLoader__.load({
       placeholderKey: "粘贴 Cursor API Key",
       placeholderId: "work",
       placeholderLabel: "工作",
-      commandHint: "对话命令：/cursor-keys、/cursor-key-set、/cursor-key-use、/cursor-web on|off、/cursor-web-default on|off。",
+      commandHint: "对话命令：/cursor-keys、/cursor-key-set、/cursor-key-use、/cursor-key-add、/cursor-key-remove。",
       pluginVersion: "插件版本：",
       error: "错误",
     };
@@ -173,7 +161,6 @@ window.__ModuleLoader__.load({
         }
       };
 
-      const webOn = status?.enableWebTools === true;
 
       return jsxs("section", {
         style: css.section,
@@ -184,39 +171,13 @@ window.__ModuleLoader__.load({
           jsxs("div", {
             style: css.card,
             children: [
-              jsx("h3", { style: css.h3, children: text("webTitle") }),
-              jsx("p", { style: css.hint, children: text("webHint") }),
               jsxs("div", {
                 style: css.row,
                 children: [
-                  jsxs("div", {
-                    style: css.status,
-                    children: [
-                      jsx(StateDot, { tone: webOn ? "success" : "neutral" }),
-                      webOn ? text("webOn") : text("webOff"),
-                    ],
-                  }),
-                  jsxs("div", {
-                    style: css.actions,
-                    children: [
-                      jsx(Button, {
-                        variant: webOn ? "outline" : "primary",
-                        disabled: busy,
-                        onClick: () => { void run(() => request("/web-default", "POST", { enabled: !webOn })); },
-                        children: busy ? text("busy") : webOn ? text("webDisable") : text("webEnable"),
-                      }),
-                      jsx(Button, { variant: "outline", disabled: busy, onClick: () => { void run(refresh); }, children: text("refresh") }),
-                    ],
-                  }),
+                  jsx("h3", { style: css.h3, children: text("keysTitle") }),
+                  jsx(Button, { variant: "outline", disabled: busy, onClick: () => { void run(refresh); }, children: text("refresh") }),
                 ],
               }),
-            ],
-          }),
-
-          jsxs("div", {
-            style: css.card,
-            children: [
-              jsx("h3", { style: css.h3, children: text("keysTitle") }),
               jsx("p", { style: css.hint, children: text("keysHint") }),
               error ? jsx("p", { role: "alert", style: css.error, children: error }) : null,
               ...(status?.profiles ?? []).map((profile) =>

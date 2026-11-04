@@ -1,11 +1,11 @@
 /**
- * Live UI state for multi-key profiles + global web-tools default.
+ * Live UI state for multi-key profiles.
  * Prefer persisting through ctx.settings when mounted; otherwise keep an
  * in-memory overlay (keys themselves always go through credentials.set).
  */
 import { credentialRef } from "@deepseek-ai/dsh-credentials";
 
-import { cfgBool, cfgGet, cfgString } from "./config-value.ts";
+import { cfgGet, cfgString } from "./config-value.ts";
 import {
   type ApiKeyProfile,
   type KeyConfig,
@@ -14,7 +14,6 @@ import {
 } from "./keys.ts";
 
 export type CursorUiConfig = KeyConfig & {
-  enableWebTools?: boolean | { get?: () => boolean };
   apiKeyProfiles?: ApiKeyProfile[] | { get?: () => ApiKeyProfile[] };
   activeKeyId?: string | { get?: () => string };
 };
@@ -30,7 +29,6 @@ export type ProfileStatus = {
 };
 
 type Overlay = {
-  enableWebTools?: boolean;
   activeKeyId?: string;
   apiKeyProfiles?: ApiKeyProfile[];
 };
@@ -53,20 +51,13 @@ export function readActiveKeyId(config: CursorUiConfig | undefined): string {
   return want && profiles.some((p) => p.id === want) ? want : profiles[0]?.id ?? "default";
 }
 
-export function readEnableWebTools(config: CursorUiConfig | undefined): boolean {
-  if (overlay.enableWebTools !== undefined) return overlay.enableWebTools;
-  return cfgBool(config?.enableWebTools, false);
-}
-
 export function applyOverlay(next: Overlay): void {
-  if (next.enableWebTools !== undefined) overlay.enableWebTools = next.enableWebTools;
   if (next.activeKeyId !== undefined) overlay.activeKeyId = next.activeKeyId;
   if (next.apiKeyProfiles !== undefined) overlay.apiKeyProfiles = next.apiKeyProfiles;
 }
 
 /** Test hook. */
 export function resetOverlay(): void {
-  delete overlay.enableWebTools;
   delete overlay.activeKeyId;
   delete overlay.apiKeyProfiles;
 }
@@ -226,14 +217,8 @@ export async function useProfile(ctx: any, config: CursorUiConfig | undefined, i
   return listProfileStatus(ctx, { ...config, activeKeyId: id });
 }
 
-export async function setWebDefault(ctx: any, enabled: boolean): Promise<boolean> {
-  await persistConfig(ctx, { enableWebTools: enabled });
-  return enabled;
-}
-
 export function uiSnapshot(ctx: any, config: CursorUiConfig | undefined) {
   return (async () => ({
-    enableWebTools: readEnableWebTools(config),
     activeKeyId: readActiveKeyId(config),
     profiles: await listProfileStatus(ctx, config),
     settingsNs: settingsNamespace(ctx),

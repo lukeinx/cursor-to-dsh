@@ -2,7 +2,7 @@
 
 [![license](https://img.shields.io/npm/l/cursor-to-dsh)](LICENSE)
 
-> Fork: [AngusFu/cursor-to-dsh](https://github.com/AngusFu/cursor-to-dsh)（上游 [lukeinx/cursor-to-dsh](https://github.com/lukeinx/cursor-to-dsh)）。本 fork 增加：**Settings → Cursor 配置页**（多 API Key / 选用 / 联网开关）、会话级 `/cursor-web`、可选 **Cursor `webSearch` / `webFetch`** 与 DSH 工具卡片。
+> Fork: [AngusFu/cursor-to-dsh](https://github.com/AngusFu/cursor-to-dsh)（上游 [lukeinx/cursor-to-dsh](https://github.com/lukeinx/cursor-to-dsh)）。本 fork 增加：**Settings → Cursor 配置页**（多 API Key / 选用 / 经 credentials 存储）。
 
 > Use Cursor models as the `cursor` LLM provider in DeepSeek Harness (DSH) and DeepSeek Desktop, through the official `@cursor/sdk` and your own Cursor API key. DSH keeps the agent loop, tools and permissions; Cursor is only the model. The docs are in Chinese.
 
@@ -14,7 +14,6 @@
 
 - **官方接口**：只用 Cursor 官方 `@cursor/sdk` 和你自己的 API Key，不逆向私有协议、不读 Cursor IDE 登录态；通过 DSH 的 `ctx.llm.registerAdapter` 注册，不改宿主代码。
 - **工具归 DSH**：默认关闭 Cursor 内置工具；读写文件、执行命令都由 DSH 执行，沿用沙箱和审批。
-- **可选联网**：在 **设置 → Cursor** 打开默认联网，或会话里 `/cursor-web on|off`。开启后 Cursor 可调用官方 `webSearch` / `webFetch`（Cursor 侧执行，**不经** DSH 审批）。流式阶段用 thinking 显示进度；本轮以 `stop` 结束时再刷出工具卡片。
 - **多 Key UI**：设置 → Cursor 添加 / 保存 / 选用 / 删除；也可用 `/cursor-key-*` 命令。
 - **缓存复用**：每个 DSH 会话对应一个 Cursor agent，只发新增内容；工具结果回填到同一个 run 继续。
 - **模型与用量**：模型和推理强度来自 Cursor 实时目录，始终 `fast=false`；按 DSH 互不重叠的用量桶上报，不误报超限。
@@ -58,11 +57,8 @@
 2. **添加** profile（如 `work` / `personal`）
 3. 在对应行粘贴 API Key → **保存 Key**（只写进 DSH credentials，界面永不回显）
 4. 点 **选用** 切换当前 Key
-5. 需要时打开 **联网工具（默认）**（`webSearch` / `webFetch`）
 
-单次对话覆盖联网：在聊天输入 `/cursor-web on` 或 `/cursor-web off`（高于设置默认；下一轮会按需重建 Cursor agent）。
-
-也可用斜杠命令（非 Web 表面）：`/cursor-keys`、`/cursor-key-set <id> <key>`（不记入会话日志）、`/cursor-key-use <id>`、`/cursor-web-default on|off`。
+也可用斜杠命令（非 Web 表面）：`/cursor-keys`、`/cursor-key-set <id> <key>`（不记入会话日志）、`/cursor-key-use <id>`、`/cursor-key-add`、`/cursor-key-remove`。
 
 > 不要手改 `~/.dsh/.credentials.yaml`。配置页和命令会调用 `credentials.set`；yaml 只是底层存储。
 
@@ -95,7 +91,6 @@
 - id: llm-cursor
   name: cursor-to-dsh
   config:
-    enableWebTools: false
     apiKeyProfiles:
       - id: default
         label: Default
@@ -110,7 +105,6 @@
 
 | 配置项 | 默认值 | 环境变量覆盖 | 含义 |
 |---|---|---|---|
-| `enableWebTools` | `false` | `DSH_CURSOR_WEB_TOOLS`；会话 `/cursor-web` 更高优先 | 默认是否开启 Cursor 官方 `webSearch` / `webFetch`（设置 → Cursor 可改） |
 | `apiKeyProfiles` | 一项 `default` | | 多把 Key 的元数据（密钥在 credentials；请用设置页维护） |
 | `activeKeyId` | `default` | | 当前使用的 profile `id`（设置页「选用」） |
 | `apiKeyEnv` | `CURSOR_API_KEY` | | 兼容旧版：profiles 为空时的单 key 凭据名 |
@@ -120,17 +114,8 @@
 
 其他环境变量：`DSH_CURSOR_DEBUG=1` 输出调试日志到 stderr；`DSH_CURSOR_PREWARM=0` 关闭预热（插件加载后在后台预建一次 agent，省掉 Cursor SDK 首次约 8 秒的初始化）。
 
-### 联网工具说明（fork）
-
-- 开启后 `Agent.create({ tools: ["mcp","webSearch","webFetch"] })`。
-- Cursor 本地 agent 直接跑 web 工具（**绕过 DSH 沙箱/审批**，也**不走** DSH 自带搜索计费）。
-- 流事件：`tool_call` → thinking 进度；本轮 `finish=stop` 时刷出 DSH `tool-call` 卡片 + 短摘要。若本轮还要交接 DSH MCP 工具（`finish=tool-calls`），则**只保留 thinking 进度、不刷卡片**，以免 DSH 误执行 `webSearch`。
-- **缺口**：卡片没有对应的 DSH `tool` 结果消息（结果已在 Cursor 侧消费）；摘要只是 best-effort 截断。
-
 ## 已知限制
 
-- 开启 web 工具后，联网不经 DSH 审批；请只在信任环境打开。
-- web 工具卡片无 DSH tool-result 回填；与 DSH MCP 工具同轮出现时仅显示 thinking 进度。
 - 文件附件、已卸载（offloaded）或读不出的图片不转给 Cursor，只留占位说明；重放历史时只带最后一条用户消息的图片。
 - 工具交接期间不报用量，上下文用量在 run 结束时更新。
 - 不支持 `stop`（报 `UNSUPPORTED_OPTION`）；`temperature`、`maxTokens` 被忽略。

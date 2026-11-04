@@ -4,7 +4,6 @@
     - id: llm-cursor
       name: cursor-to-dsh
       config:
-        enableWebTools: false
         apiKeyProfiles:
           - id: default
             label: Default

@@ -1,9 +1,8 @@
 /**
  * DSH plugin entry: registers Cursor as the `cursor` LLM provider route.
  *
- * Keys and the global web-tools default are managed from Settings → Cursor
- * (and slash commands). Secrets go through credentials.set — never hand-edit
- * ~/.dsh/.credentials.yaml. Per-chat web tools: /cursor-web on|off.
+ * Keys are managed from Settings → Cursor (and slash commands). Secrets go
+ * through credentials.set — never hand-edit ~/.dsh/.credentials.yaml.
  */
 import type { Context, Volatile } from "@deepseek-ai/cordis";
 import { credentialRef } from "@deepseek-ai/dsh-credentials";
@@ -18,8 +17,7 @@ import { type ApiKeyProfile, type KeyConfig, resolveActiveApiKey } from "./keys.
 import { PROVIDER_ID, setContextPreference } from "./models.ts";
 import { createCursorAgent, listCursorModels, prewarmCursor } from "./sdk.ts";
 import { closeAllCursorSessions, debug } from "./session.ts";
-import { resolveWebToolsEnabled } from "./session-web.ts";
-import { readActiveKeyId, readEnableWebTools, readProfiles, type CursorUiConfig } from "./ui-state.ts";
+import { readActiveKeyId, readProfiles, type CursorUiConfig } from "./ui-state.ts";
 
 export const name = "cursor-to-dsh";
 export const inject = ["llm"];
@@ -30,8 +28,6 @@ export interface Config {
   apiKey?: string;
   context: string | Volatile<string>;
   cwd?: string | Volatile<string>;
-  /** Global default; session /cursor-web override wins. Env DSH_CURSOR_WEB_TOOLS overrides this when set. */
-  enableWebTools?: boolean | Volatile<boolean>;
   apiKeyProfiles?: ApiKeyProfile[] | Volatile<ApiKeyProfile[]>;
   activeKeyId?: string | Volatile<string>;
 }
@@ -44,10 +40,6 @@ const ApiKeyProfileSchema = Schema.object({
 });
 
 export const Config: Schema<Config> = Schema.object({
-  enableWebTools: Schema.boolean()
-    .default(false)
-    .description("Default: enable Cursor built-in webSearch / webFetch. Per-chat override: /cursor-web on|off. Env DSH_CURSOR_WEB_TOOLS=1|0 overrides this default.")
-    .volatile(),
   apiKeyProfiles: Schema.array(ApiKeyProfileSchema)
     .default([{ id: "default", label: "Default", apiKeyEnv: "CURSOR_API_KEY" }])
     .description("Cursor API key profiles. Add/select/store keys in Settings → Cursor (or /cursor-key-* commands).")
@@ -118,15 +110,9 @@ export function apply(ctx: Context, config: Config): void {
     return { data: Buffer.from(stored.data).toString("base64"), mimeType: stored.ref?.mediaType ?? ref.mediaType };
   };
 
-  const enableWebForSession = (sessionId?: string) =>
-    resolveWebToolsEnabled({
-      sessionId,
-      configFlag: readEnableWebTools(getConfig()),
-    });
-
   const prewarm = /^(0|false|off)$/i.test(process.env.DSH_CURSOR_PREWARM ?? "")
     ? undefined
-    : (opts: { apiKey: string; modelId: string }) => void prewarmCursor({ ...opts, enableWebTools: enableWebForSession() });
+    : (opts: { apiKey: string; modelId: string }) => void prewarmCursor(opts);
 
   const adapter = new CursorAdapter({
     createAgent: createCursorAgent,
@@ -135,7 +121,6 @@ export function apply(ctx: Context, config: Config): void {
     cwdFor,
     readImage,
     prewarm,
-    enableWebTools: enableWebForSession,
   });
   (ctx as any).llm.registerConfigurableProviders([
     { provider: PROVIDER_ID, displayName: "Cursor", settingsNs: (ctx as any).fiber?.entry?.options.id ?? name, settingsPath: [] },
