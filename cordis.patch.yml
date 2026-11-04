@@ -4,5 +4,11 @@
     - id: llm-cursor
       name: cursor-to-dsh
       config:
+        enableWebTools: false
+        apiKeyProfiles:
+          - id: default
+            label: Default
+            apiKeyEnv: CURSOR_API_KEY
+        activeKeyId: default
         apiKeyEnv: CURSOR_API_KEY
         context: min

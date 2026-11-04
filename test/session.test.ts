@@ -477,3 +477,59 @@ test("prewarm runs after a live catalog, not on the fallback catalog", async () 
   await adapterFor(cursor, { prewarm: (o: any) => warmed.push(o), resolveApiKey: async () => undefined }).listModels("cursor");
   assert.equal(warmed.length, 1);
 });
+
+
+test("enableWebTools puts webSearch/webFetch on the agent and bridges tool_call into cards on stop", async () => {
+  const cursor = fakeCursor(async function* () {
+    yield { type: "tool_call", call_id: "w1", name: "webSearch", status: "running", args: { query: "dsh cursor" } };
+    yield {
+      type: "tool_call",
+      call_id: "w1",
+      name: "webSearch",
+      status: "completed",
+      args: { query: "dsh cursor" },
+      result: { results: [{ title: "One" }, { title: "Two" }] },
+    };
+    yield say("found two");
+  });
+  const adapter = adapterFor(cursor, { enableWebTools: () => true });
+  const r = await call(adapter, [sys("SYS"), user("search please")]);
+  assert.deepEqual(cursor.created[0].tools, ["mcp", "webSearch", "webFetch"]);
+  assert.deepEqual(r.finish, { kind: "stop" });
+  assert.equal(r.text.includes("found two"), true);
+  assert.equal(r.calls.length, 1);
+  assert.equal(r.calls[0].name, "webSearch");
+  assert.match(r.calls[0].arguments, /dsh cursor/);
+  const thinking = r.chunks.filter((c) => c.type === "reasoning-delta").map((c) => c.text).join("");
+  assert.match(thinking, /webSearch running/);
+  assert.match(thinking, /webSearch done/);
+});
+
+test("without enableWebTools the agent stays mcp-only", async () => {
+  const cursor = fakeCursor(async function* () {
+    yield say("ok");
+  });
+  const adapter = adapterFor(cursor);
+  await call(adapter, [sys("SYS"), user("hi")]);
+  assert.deepEqual(cursor.created[0].tools, ["mcp"]);
+});
+
+test("native web cards are not emitted when the turn hands off DSH tools", async () => {
+  const cursor = fakeCursor(async function* (ctx) {
+    yield { type: "tool_call", call_id: "w1", name: "webSearch", status: "running", args: { query: "x" } };
+    yield { type: "tool_call", call_id: "w1", name: "webSearch", status: "completed", args: { query: "x" }, result: { results: [] } };
+    yield say("reading");
+    // DSH MCP tool — finish must be tool-calls with only `read`, not webSearch cards.
+    await ctx.callTool("read", { path: "a" }, "c-read");
+    yield say("done");
+  });
+  const adapter = adapterFor(cursor, { enableWebTools: () => true });
+  const r = await call(adapter, [sys("SYS"), user("go")]);
+  assert.deepEqual(r.finish, { kind: "tool-calls" });
+  assert.deepEqual(
+    r.calls.map((c) => c.name),
+    ["read"],
+  );
+  const thinking = r.chunks.filter((c) => c.type === "reasoning-delta").map((c) => c.text).join("");
+  assert.match(thinking, /webSearch/);
+});

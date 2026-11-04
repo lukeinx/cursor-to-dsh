@@ -1,15 +1,15 @@
 {
   "name": "cursor-to-dsh",
-  "version": "0.1.1",
-  "description": "DeepSeek Harness plugin: Cursor models as the `cursor` LLM provider, with one Cursor agent per DSH session",
-  "author": "lukeinx",
+  "version": "0.2.0",
+  "description": "DeepSeek Harness plugin: Cursor models as the cursor LLM provider (fork: multi API keys + optional Cursor webSearch/webFetch with DSH tool cards)",
+  "author": "AngusFu (fork of lukeinx/cursor-to-dsh)",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/lukeinx/cursor-to-dsh.git"
+    "url": "git+https://github.com/AngusFu/cursor-to-dsh.git"
   },
-  "homepage": "https://github.com/lukeinx/cursor-to-dsh#readme",
+  "homepage": "https://github.com/AngusFu/cursor-to-dsh#readme",
   "bugs": {
-    "url": "https://github.com/lukeinx/cursor-to-dsh/issues"
+    "url": "https://github.com/AngusFu/cursor-to-dsh/issues"
   },
   "type": "module",
   "license": "MIT",

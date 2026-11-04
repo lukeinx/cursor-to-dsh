@@ -15,6 +15,8 @@ DeepSeek Harness (DSH) plugin that registers Cursor as the `cursor` LLM provider
 | `src/prompt.ts` | Transcript rendering, fingerprints, tool results, token estimates |
 | `src/usage.ts` | Cursor usage -> DSH disjoint buckets, Cursor overhead calibration |
 | `src/sdk.ts` | Cursor SDK access (agent, catalog, ripgrep path) |
+| `src/keys.ts` | Multi API-key profiles + active key resolution |
+| `src/web-tools.ts` | Optional Cursor webSearch/webFetch enable + stream bridging |
 | `cordis.patch.yml` | Bundle layer that inserts the `llm-cursor` row |
 
 ## Commands
@@ -32,7 +34,7 @@ Live check (real Cursor, no DSH): `CURSOR_API_KEY=... node --experimental-strip-
 ## Rules
 
 - Use DSH's official seam (`ctx.llm.registerAdapter`); never wrap or patch DSH internals.
-- Cursor's built-in tools stay off. DSH tools are Cursor custom (MCP) tools whose `execute` waits for DSH's result.
+- Cursor's built-in tools stay off by default. Optional `enableWebTools` (or `DSH_CURSOR_WEB_TOOLS=1`) adds `webSearch`/`webFetch` only; they run on Cursor's side. Mirror their `tool_call` events into DSH stream cards on `finish=stop` (never on `toolUse`, or DSH would try to execute them). All other tools stay DSH MCP custom tools.
 - DSH host packages (`@deepseek-ai/cordis`, `dsh-llm`, `dsh-credentials`, `dsh-launch-environment`, `schemastery`) are `peerDependencies` + `devDependencies`, never `dependencies`: DSH supplies the shared instances.
 - Keep the route id `cursor`, model ids, the `llm-cursor` row id and `DSH_CURSOR_*` variables stable; user patches depend on them.
 - Error codes stay outside DSH's default retry list; a half-finished Cursor run must not be replayed.

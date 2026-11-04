@@ -3,6 +3,8 @@ import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import { cursorBuiltinTools } from "./web-tools.ts";
+
 const require = createRequire(import.meta.url);
 
 /**
@@ -42,7 +44,10 @@ export async function createCursorAgent(opts: any): Promise<any> {
  */
 let warming: Promise<void> | undefined;
 
-export function prewarmCursor(opts: { apiKey: string; modelId: string }, create = createCursorAgent): Promise<void> {
+export function prewarmCursor(
+  opts: { apiKey: string; modelId: string; enableWebTools?: boolean },
+  create = createCursorAgent,
+): Promise<void> {
   warming ??= (async () => {
     let agent: any;
     let local: any;
@@ -50,7 +55,12 @@ export function prewarmCursor(opts: { apiKey: string; modelId: string }, create 
       const cwd = join(tmpdir(), "cursor-to-dsh-warmup");
       mkdirSync(cwd, { recursive: true });
       local = { cwd, settingSources: [] };
-      agent = await create({ model: { id: opts.modelId }, apiKey: opts.apiKey, tools: ["mcp"], local });
+      agent = await create({
+        model: { id: opts.modelId },
+        apiKey: opts.apiKey,
+        tools: cursorBuiltinTools(Boolean(opts.enableWebTools)),
+        local,
+      });
       const run = await agent.send(".");
       await Promise.resolve(run.cancel?.()).catch(() => {});
       await Promise.resolve(run.wait?.()).catch(() => {});

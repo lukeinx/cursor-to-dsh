@@ -181,3 +181,44 @@ test("prewarm: one throwaway agent per process, run cancelled, agent closed, fai
   });
   resetPrewarm();
 });
+
+
+import { activeProfile, normalizeProfiles, profileCredentialRef, resolveActiveApiKey } from "../src/keys.ts";
+import { cursorBuiltinTools, isCursorWebTool, summarizeWebToolResult, webToolsEnabled } from "../src/web-tools.ts";
+
+test("web tool helpers: enable flag, names, summaries", () => {
+  assert.deepEqual(cursorBuiltinTools(false), ["mcp"]);
+  assert.deepEqual(cursorBuiltinTools(true), ["mcp", "webSearch", "webFetch"]);
+  assert.equal(isCursorWebTool("webSearch"), true);
+  assert.equal(isCursorWebTool("read"), false);
+  assert.equal(webToolsEnabled(false, {}), false);
+  assert.equal(webToolsEnabled(false, { DSH_CURSOR_WEB_TOOLS: "1" }), true);
+  assert.equal(webToolsEnabled(true, { DSH_CURSOR_WEB_TOOLS: "0" }), false);
+  assert.match(summarizeWebToolResult("webSearch", { results: [{ title: "A" }, { title: "B" }] }, false), /2 results/);
+  assert.match(summarizeWebToolResult("webFetch", { url: "https://x.test", text: "hello world" }, false), /https:\/\/x\.test/);
+});
+
+test("api key profiles: active selection and lookup order", async () => {
+  const profiles = normalizeProfiles({
+    apiKeyProfiles: [
+      { id: "personal", label: "Personal", apiKeyEnv: "CURSOR_API_KEY_PERSONAL" },
+      { id: "work", label: "Work", apiKeyEnv: "CURSOR_API_KEY_WORK", apiKey: "inline-work" },
+    ],
+    activeKeyId: "work",
+  });
+  assert.equal(activeProfile({ apiKeyProfiles: profiles, activeKeyId: "work" }).id, "work");
+  assert.equal(profileCredentialRef(profiles[0]), "CURSOR_API_KEY_PERSONAL");
+  const key = await resolveActiveApiKey(
+    { apiKeyProfiles: profiles, activeKeyId: "work" },
+    { fromCredentials: async () => undefined, fromEnv: () => undefined },
+  );
+  assert.equal(key, "inline-work");
+  const fromCred = await resolveActiveApiKey(
+    { apiKeyProfiles: profiles, activeKeyId: "personal" },
+    { fromCredentials: async (ref) => (ref === "CURSOR_API_KEY_PERSONAL" ? "cred-personal" : undefined), fromEnv: () => undefined },
+  );
+  assert.equal(fromCred, "cred-personal");
+  const legacy = normalizeProfiles({ apiKeyEnv: "CURSOR_API_KEY" });
+  assert.equal(legacy[0].id, "default");
+  assert.equal(profileCredentialRef(legacy[0]), "CURSOR_API_KEY");
+});

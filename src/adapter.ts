@@ -27,6 +27,8 @@ export interface AdapterDeps {
   readImage?: (ref: any, signal?: AbortSignal) => Promise<Image | undefined>;
   /** Called once a live catalog proves the key works; pays the SDK's per-process setup early. */
   prewarm?: (opts: { apiKey: string; modelId: string }) => void;
+  /** Whether Cursor webSearch / webFetch are offered on new agents. */
+  enableWebTools?: () => boolean;
 }
 
 export class CursorAdapter extends LlmAdapter {
@@ -80,6 +82,7 @@ export class CursorAdapter extends LlmAdapter {
       apiKey,
       sessionKey: sessionKeyFor(sessionId, transcript, options.purpose),
       cwd: this.deps.cwdFor(sessionId),
+      enableWebTools: this.deps.enableWebTools?.() ?? false,
       deps: { createAgent: this.deps.createAgent },
       reply: new Reply(queue),
     });
