@@ -7,7 +7,7 @@
  */
 import { LlmAdapter, LlmError } from "@deepseek-ai/dsh-llm";
 
-import { FALLBACK_MODELS, PROVIDER_ID, contextWindow, modelNames, reasoningInfo, type CatalogModel } from "./models.ts";
+import { FALLBACK_MODELS, PROVIDER_ID, contextWindow, modelNames, reasoningInfo, supportsFast, type CatalogModel } from "./models.ts";
 import type { Image } from "./prompt.ts";
 import { ChunkQueue, Reply } from "./reply.ts";
 import { debug, runTurn, sessionKeyFor } from "./session.ts";
@@ -15,6 +15,7 @@ import { imageRefs, readRequest } from "./transcript.ts";
 
 const CATALOG_TTL_MS = 10 * 60_000;
 const CATALOG_RETRY_MS = 60_000;
+const FAST_MODEL_SUFFIX = "-dsh-fast";
 /** Attachments are immutable, and every request carries the whole history: read each once. */
 const IMAGE_CACHE_SIZE = 64;
 
@@ -29,6 +30,7 @@ export interface AdapterDeps {
   prewarm?: (opts: { apiKey: string; modelId: string }) => void;
 }
 
+/** Exposes Cursor's catalog and selectable speed variants through DSH's model interface. */
 export class CursorAdapter extends LlmAdapter {
   private readonly deps: AdapterDeps;
   private catalog: { models: CatalogModel[]; live: boolean; at: number } | undefined;
@@ -47,33 +49,42 @@ export class CursorAdapter extends LlmAdapter {
   override async listModels(provider: string): Promise<any[]> {
     const models = await this.models();
     const names = modelNames(models);
-    return models.map((m) => ({ provider, id: m.id, name: names.get(m.id), inputModalities: this.modalities() }));
+    return models.flatMap((model) => {
+      const entry = { provider, id: model.id, name: names.get(model.id), inputModalities: this.modalities() };
+      const fastId = model.id + FAST_MODEL_SUFFIX;
+      if (!supportsFast(model) || names.has(fastId)) return [entry];
+      return [entry, { ...entry, id: fastId, name: `${entry.name} (Fast)` }];
+    });
   }
 
   override async resolveModel(provider: string, model: string): Promise<any> {
     const models = await this.models();
-    const m = models.find((c) => c.id === model);
+    const selection = this.selectModel(models, model);
+    const { baseId, fast, entry } = selection;
+    const baseName = modelNames(models).get(baseId) ?? baseId;
     const info: any = {
       provider,
       id: model,
-      name: modelNames(models).get(model) ?? model,
+      name: fast ? `${baseName} (Fast)` : baseName,
       inputModalities: this.modalities(),
-      context: { contextWindow: contextWindow(m) },
+      context: { contextWindow: contextWindow(entry) },
       systemPromptUpdate: "in-history",
     };
-    const reasoning = reasoningInfo(m);
+    const reasoning = reasoningInfo(entry);
     if (reasoning) info.reasoning = reasoning;
     return info;
   }
 
   override async *stream(options: any): AsyncIterable<any> {
     if (options?.stop?.length) throw new LlmError("Cursor does not support stop sequences", "UNSUPPORTED_OPTION");
-    const [model, apiKey, images] = await Promise.all([this.find(options.model), this.deps.resolveApiKey(), this.loadImages(options)]);
+    const [models, apiKey, images] = await Promise.all([this.models(), this.deps.resolveApiKey(), this.loadImages(options)]);
+    const { baseId, fast, entry } = this.selectModel(models, options.model);
     const transcript = readRequest(options, images);
     const sessionId = typeof options.sessionId === "string" ? options.sessionId : undefined;
     const queue = new ChunkQueue();
     void runTurn({
-      model: { id: options.model, cursorParameters: model?.parameters },
+      model: { id: baseId, cursorParameters: entry?.parameters },
+      fast,
       transcript,
       reasoning: options.reasoningEffort,
       signal: options.signal,
@@ -115,9 +126,17 @@ export class CursorAdapter extends LlmAdapter {
     return out;
   }
 
-  /** Catalog entry for a model id; unknown ids still route, without Cursor params. */
-  private async find(id: string): Promise<CatalogModel | undefined> {
-    return (await this.models()).find((m) => m.id === id);
+  /** Resolve a DSH Fast ID to the real SDK model ID. Direct catalog IDs take priority. */
+  private selectModel(models: CatalogModel[], id: string) {
+    const entry = models.find((model) => model.id === id);
+    if (entry || !id.endsWith(FAST_MODEL_SUFFIX)) return { baseId: id, fast: false, entry };
+
+    const baseId = id.slice(0, -FAST_MODEL_SUFFIX.length);
+    const base = models.find((model) => model.id === baseId);
+    if (!supportsFast(base)) {
+      throw new LlmError(`Cursor Fast is unavailable for ${baseId} in the current model catalog.`, "UNSUPPORTED_OPTION");
+    }
+    return { baseId, fast: true, entry: base };
   }
 
   private async models(): Promise<CatalogModel[]> {
