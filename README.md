@@ -14,7 +14,7 @@
 - **官方接口**：只用 Cursor 官方 `@cursor/sdk` 和你自己的 API Key，不逆向私有协议、不读 Cursor IDE 登录态；通过 DSH 的 `ctx.llm.registerAdapter` 注册，不改宿主代码。
 - **工具归 DSH**：Cursor 内置工具全部关闭，读写文件、执行命令都由 DSH 执行，沿用 DSH 的沙箱和审批。
 - **缓存复用**：每个 DSH 会话对应一个 Cursor agent，只发新增内容；工具结果回填到同一个 run 继续。
-- **模型与用量**：模型和推理强度来自 Cursor 实时目录，始终 `fast=false`；按 DSH 互不重叠的用量桶上报，不误报超限。
+- **模型与用量**：模型、推理等级和 Fast 支持情况来自 Cursor 实时目录。DSH 显示每次调用的用量。
 - **图片**：用户消息和工具结果里的图片转给 Cursor。
 
 ## 安装
@@ -62,6 +62,10 @@ refs:
 ### 验证
 
 「设置 → 模型」里出现 Cursor，模型选择里有 `cursor` 下的模型即成功。也可以把 `agent-default-model` 设为 `provider: cursor`。
+
+### 切换 Fast
+
+在会话的模型选择器里，支持 Fast 的模型会多出一项，例如 `Grok 4.7 (Fast)`。两项使用同一套推理等级。基础项继续使用标准速度，带 `(Fast)` 的项请求 Cursor 的 Fast 速度档，按该档费率计入用量。
 
 ### 让 Agent 代装
 

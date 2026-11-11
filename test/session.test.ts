@@ -442,7 +442,7 @@ test("tool results carry images to Cursor; unreadable images become a note", asy
 
 test("models: live catalog with efforts, fallback when the catalog is unavailable", async () => {
   const adapter = adapterFor(fakeCursor(async function* () {}));
-  assert.deepEqual((await adapter.listModels("cursor")).map((m: any) => m.id), ["m", "claude"]);
+  assert.deepEqual((await adapter.listModels("cursor")).map((m: any) => m.id), ["m", "claude", "claude-dsh-fast"]);
   const claude = await adapter.resolveModel("cursor", "claude");
   assert.equal(claude.name, "Claude");
   assert.equal(claude.context.contextWindow, 300_000);
@@ -454,7 +454,7 @@ test("models: live catalog with efforts, fallback when the catalog is unavailabl
   const autos = adapterFor(fakeCursor(async function* () {}), {
     listModels: async () => [...catalog, { id: "auto-smart", displayName: "Auto" }, { id: "default", displayName: "Auto" }],
   });
-  assert.deepEqual((await autos.listModels("cursor")).map((m: any) => m.name), ["M", "Claude", "Auto (auto-smart)", "Auto (default)"]);
+  assert.deepEqual((await autos.listModels("cursor")).map((m: any) => m.name), ["M", "Claude", "Claude (Fast)", "Auto (auto-smart)", "Auto (default)"]);
   assert.equal((await autos.resolveModel("cursor", "default")).name, "Auto (default)");
 
   const offline = adapterFor(fakeCursor(async function* () {}), {
@@ -465,6 +465,30 @@ test("models: live catalog with efforts, fallback when the catalog is unavailabl
   assert.deepEqual((await offline.listModels("cursor")).map((m: any) => m.id), FALLBACK_MODELS.map((m) => m.id));
   const keyless = adapterFor(fakeCursor(async function* () {}), { resolveApiKey: async () => undefined });
   assert.equal((await keyless.listModels("cursor")).length, FALLBACK_MODELS.length);
+});
+
+test("the Fast model keeps reasoning levels and selects a separate Cursor agent", async () => {
+  const cursor = fakeCursor(async function* () {
+    yield say("ok");
+  });
+  const adapter = adapterFor(cursor);
+  const standard = await adapter.resolveModel("cursor", "claude");
+  const fast = await adapter.resolveModel("cursor", "claude-dsh-fast");
+  assert.equal(fast.id, "claude-dsh-fast");
+  assert.equal(fast.name, "Claude (Fast)");
+  assert.deepEqual(fast.reasoning, standard.reasoning);
+  assert.deepEqual(fast.context, standard.context);
+
+  const first = [user("Standard")];
+  const r1 = await call(adapter, first, { model: standard.id, reasoningEffort: "high" });
+  const r2 = await call(adapter, [...first, r1.assistant, user("Fast")], { model: fast.id, reasoningEffort: "high" });
+  assert.equal(r2.text, "ok");
+  assert.deepEqual(cursor.created.map(({ model }) => model), [
+    { id: "claude", params: [{ id: "thinking", value: "true" }, { id: "effort", value: "high" }, { id: "fast", value: "false" }, { id: "context", value: "300k" }] },
+    { id: "claude", params: [{ id: "thinking", value: "true" }, { id: "effort", value: "high" }, { id: "fast", value: "true" }, { id: "context", value: "300k" }] },
+  ]);
+  await assert.rejects(call(adapter, first, { model: "m-dsh-fast" }), /Fast is unavailable/);
+  assert.equal(cursor.created.length, 2);
 });
 
 test("prewarm runs after a live catalog, not on the fallback catalog", async () => {

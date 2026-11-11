@@ -117,11 +117,16 @@ export function effortFor(offered: string[], level: string): string | undefined 
   return usable.filter((v) => LEVEL_RANK[v] < target).pop() ?? usable[0] ?? ranked[0];
 }
 
+/** Whether the live Cursor model catalog offers the Fast speed tier. */
+export function supportsFast(model: CatalogModel | undefined): boolean {
+  return values(find(defsOf(model), "fast")).includes("true");
+}
+
 /**
  * Explicit Cursor params for one request. Without them Cursor picks its own defaults,
  * including Fast (priority pricing) and a smaller context than the catalog offers.
  */
-export function modelParams(model: any, reasoning: string | undefined): Param[] | undefined {
+export function modelParams(model: any, reasoning: string | undefined, fast = false): Param[] | undefined {
   const defs = defsOf(model);
   const params: Param[] = [];
   const off = !reasoning || reasoning === "off";
@@ -141,8 +146,9 @@ export function modelParams(model: any, reasoning: string | undefined): Param[] 
     if (value) params.push({ id: effort.id, value });
   }
 
-  const fast = find(defs, "fast");
-  if (fast && values(fast).includes("false")) params.push({ id: fast.id, value: "false" });
+  const speed = find(defs, "fast");
+  const fastValue = String(fast);
+  if (speed && values(speed).includes(fastValue)) params.push({ id: speed.id, value: fastValue });
 
   const context = preferredContext(find(defs, "context"));
   if (context) params.push({ id: "context", value: context.value });

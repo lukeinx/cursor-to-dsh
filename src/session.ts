@@ -332,6 +332,7 @@ async function continueWithNewTools(
 /** Run one DSH model call on a persistent Cursor session; every chunk goes to `reply`. */
 export async function runTurn(opts: {
   model: { id: string; cursorParameters?: unknown };
+  fast?: boolean;
   transcript: Transcript;
   reasoning?: string;
   signal?: AbortSignal;
@@ -348,7 +349,7 @@ export async function runTurn(opts: {
     return reply.finish("error", "No Cursor API key. Store CURSOR_API_KEY in DSH credentials or export it before launching DSH.", ERROR_CODES.missingKey);
   }
 
-  let params = modelParams(model, opts.reasoning);
+  let params = modelParams(model, opts.reasoning, opts.fast);
   const known = workingContext.get(modelId);
   if (known) params = params?.map((p) => (p.id === "context" ? { id: p.id, value: known } : p));
   const signature = signatureOf(modelId, params);
