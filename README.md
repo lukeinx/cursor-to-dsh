@@ -99,6 +99,10 @@ refs:
 
 其他环境变量：`DSH_CURSOR_DEBUG=1` 输出调试日志到 stderr；`DSH_CURSOR_PREWARM=0` 关闭预热（插件加载后在后台预建一次 agent，省掉 Cursor SDK 首次约 8 秒的初始化）。
 
+## 查看 Cursor 剩余额度
+
+打开「插件 → cursor-to-dsh → 查看 Cursor 剩余额度」。旧版 Cursor 套餐在 [Spending](https://cursor.com/dashboard/spending) 查看月额度。The X Subscription 在 [Grok Dashboard](https://grok.com/dashboard) 的 Usage 查看共享周额度。
+
 ## 已知限制
 
 - 文件附件、已卸载（offloaded）或读不出的图片不转给 Cursor，只留占位说明；重放历史时只带最后一条用户消息的图片。
