@@ -44,6 +44,11 @@ export class CursorAdapter extends LlmAdapter {
     return { id: provider, name: "Cursor" };
   }
 
+  /** Drop the cached catalog so the next listing re-reads Cursor with the current key. */
+  invalidateCatalog(): void {
+    this.catalog = undefined;
+  }
+
   override async listModels(provider: string): Promise<any[]> {
     const models = await this.models();
     const names = modelNames(models);

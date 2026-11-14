@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Cursor 模型",
+    "description": "把 Cursor 模型接入为模型提供方 cursor，使用你自己的 Cursor API Key。启用后在「设置 → 模型」的 Cursor 行粘贴 API Key 并保存，即可在模型选择里使用 cursor 下的模型。对话内容会发送给 Cursor，并计入你的 Cursor 用量；工具仍由 DSH 执行，沿用 DSH 的沙箱和审批。密钥只保存在本机凭据，不写入配置文件。停用插件后 cursor 模型不再可用。"
+  }
+}

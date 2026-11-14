@@ -467,6 +467,24 @@ test("models: live catalog with efforts, fallback when the catalog is unavailabl
   assert.equal((await keyless.listModels("cursor")).length, FALLBACK_MODELS.length);
 });
 
+test("a saved key reaches the live catalog without waiting out the fallback cache", async () => {
+  let key: string | undefined;
+  let reads = 0;
+  const adapter = adapterFor(fakeCursor(async function* () {}), {
+    resolveApiKey: async () => key,
+    listModels: async () => {
+      reads += 1;
+      return catalog;
+    },
+  });
+  assert.deepEqual((await adapter.listModels("cursor")).map((m: any) => m.id), FALLBACK_MODELS.map((m) => m.id));
+  assert.equal(reads, 0);
+  key = "k";
+  adapter.invalidateCatalog();
+  assert.deepEqual((await adapter.listModels("cursor")).map((m: any) => m.id), ["m", "claude"]);
+  assert.equal(reads, 1);
+});
+
 test("prewarm runs after a live catalog, not on the fallback catalog", async () => {
   const warmed: any[] = [];
   const cursor = fakeCursor(async function* () {

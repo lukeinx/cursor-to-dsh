@@ -1,6 +1,6 @@
 {
   "name": "cursor-to-dsh",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "DeepSeek Harness plugin: Cursor models as the `cursor` LLM provider, with one Cursor agent per DSH session",
   "author": "lukeinx",
   "repository": {
@@ -30,9 +30,15 @@
   "main": "lib/index.js",
   "exports": {
     ".": "./lib/index.js",
+    "./client": "./client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg",
     "./package.json": "./package.json"
   },
   "files": [
+    "client.js",
+    "locale/*.json",
+    "icon.svg",
     "lib",
     "src",
     "cordis.patch.yml",
@@ -41,6 +47,14 @@
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-api-remotes",
+        "@deepseek-ai/dsh-client-locale"
+      ]
     }
   },
   "engines": {
@@ -50,7 +64,7 @@
     "build": "tsc -p tsconfig.build.json",
     "prepare": "tsc -p tsconfig.build.json",
     "test": "node --experimental-strip-types --test test/*.test.ts",
-    "check": "tsc --noEmit",
+    "check": "tsc --noEmit && node --check client.js",
     "check:public": "node scripts/check-public.mjs",
     "prepublishOnly": "npm run check && npm test && npm run build && npm run check:public"
   },

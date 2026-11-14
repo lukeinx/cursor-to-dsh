@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Cursor models",
+    "description": "Adds Cursor models as the cursor model provider, using your own Cursor API key. After enabling, paste the key in the Cursor row of Settings → Models and save; the models then appear under cursor in the model picker. Conversations are sent to Cursor and count toward your Cursor usage; tools still run in DSH under its sandbox and approvals. The key is stored only in the local credentials, never in a configuration file. Disabling the plugin removes the cursor models."
+  }
+}
